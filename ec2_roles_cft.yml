@@ -1,0 +1,68 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Role for EC2 instances"
+
+Resources:
+
+  EcsNode:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: EcsNode
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+
+  EcsNodeProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: "/"
+      InstanceProfileName: EcsNode
+      Roles:
+        - !Ref EcsNode
+
+  EC2VolumeAccess:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: EC2VolumeAccess
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: "AllowEC2InstanceToManageVolumes"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "ec2:*Volume*"
+                  - "ec2:*Snapshot*"
+                Resource: "*"
+# Cannot delete volumes
+#              - Effect: "Deny"
+#                Action: "ec2:DeleteVolume"
+#                Resource: "*"
+
+  EC2VolumeAccessProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: "/"
+      InstanceProfileName: EC2VolumeAccess
+      Roles:
+        - !Ref EC2VolumeAccess
+

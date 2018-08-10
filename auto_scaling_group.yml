@@ -1,0 +1,287 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "ECS Auto Scaling Group"
+
+Parameters:
+  NetworkStack:
+    Type: "String"
+    Description: "Network Stack to apply."
+  AMI:
+    Type: AWS::EC2::Image::Id
+    Description: "ID Of Amazon Machine Image for ECS"
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: "Which key to use for ECS nodes"
+
+  NumNodes:
+    Type: String
+    Description: "How many nodes for this cluster?"
+    Default: 1
+
+Resources:
+
+  ECSLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      EbsOptimized: False
+      IamInstanceProfile: EcsNode
+      ImageId: !Ref AMI
+      InstanceMonitoring: True
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      SecurityGroups:
+        - !Ref EcsSecurityGroup
+
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+            - "\n"
+            - # This Line creates the array within the array
+              - "#!/bin/bash"
+              - !Join ["",["echo \"ECS_CLUSTER=", !Ref "AWS::StackName", "\" >> /etc/ecs/ecs.config"]]
+              - yum update -y
+              - amazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2
+              - yum install -y httpd mariadb-server
+              - systemctl start httpd
+              - systemctl enable httpd
+              - usermod -a -G apache ec2-user
+              - chown -R ec2-user:apache /var/www
+              - chmod 2775 /var/www
+              - find /var/www -type d -exec chmod 2775 {} \;
+              - find /var/www -type f -exec chmod 0664 {} \;
+              - echo "<?php phpinfo(); ?>" > /var/www/html/phpinfo.php
+              - echo "<h1> Health Check </h1>" > /var/www/html/index.html
+              - /etc/init.d/httpd restart
+
+  EcsNodeASG:
+      Type: AWS::AutoScaling::AutoScalingGroup
+      Properties:
+        DesiredCapacity: !Ref NumNodes
+        HealthCheckGracePeriod: 420
+        HealthCheckType: EC2
+        LaunchConfigurationName: !Ref ECSLaunchConfig
+        MaxSize: !Ref NumNodes
+        MinSize: !Ref NumNodes
+        LoadBalancerNames: 
+          - !Ref AlbForMicroservicesInternal
+        VPCZoneIdentifier:
+          - Fn::ImportValue:
+             !Sub ${NetworkStack}-SubnetNodesAId
+          - Fn::ImportValue:
+             !Sub ${NetworkStack}-SubnetNodesBId
+        Tags:
+          - Key: Cluster
+            Value: !Ref AWS::StackName
+            PropagateAtLaunch: True
+
+  EcsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: EcsSecurityGroup
+      GroupDescription: EcsSecurityGroup
+      VpcId:
+        Fn::ImportValue:
+          !Sub ${NetworkStack}-VpcId
+
+  EcsSecurityGroupEgres:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref EcsSecurityGroup
+      CidrIp: 0.0.0.0/0
+      IpProtocol: "-1"
+
+  EcsSecurityGroupIngressAllowNtp:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EcsSecurityGroup
+      CidrIp: 0.0.0.0/0
+      IpProtocol: "udp"
+      FromPort: 123
+      ToPort: 123
+
+  EcsSecurityGroupIngressAllowSSH:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EcsSecurityGroup
+      CidrIp: 0.0.0.0/0
+      IpProtocol: "tcp"
+      FromPort: 22
+      ToPort: 22
+
+  EcsSecurityGroupIngressAllowTCP:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EcsSecurityGroup
+      CidrIp:
+        Fn::ImportValue:
+          !Sub ${NetworkStack}-VpcCidr
+      IpProtocol: "tcp"
+      FromPort: 1024
+      ToPort: 65535
+
+  DMZLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      EbsOptimized: False
+      IamInstanceProfile: EcsNode
+      ImageId: !Ref AMI
+      InstanceMonitoring: True
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      SecurityGroups:
+        - !Ref DmzSecurityGroup
+
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+            - "\n"
+            - # This Line creates the array within the array
+              - "#!/bin/bash"
+              - !Join ["",["echo \"ECS_CLUSTER=", !Ref "AWS::StackName", "\" >> /etc/ecs/ecs.config"]]
+              - yum update -y
+              - amazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2
+              - yum install -y httpd mariadb-server
+              - systemctl start httpd
+              - systemctl enable httpd
+              - usermod -a -G apache ec2-user
+              - chown -R ec2-user:apache /var/www
+              - chmod 2775 /var/www
+              - find /var/www -type d -exec chmod 2775 {} \;
+              - find /var/www -type f -exec chmod 0664 {} \;
+              - echo "<?php phpinfo(); ?>" > /var/www/html/phpinfo.php
+              - echo "<h1> Health Check </h1>" > /var/www/html/index.html
+              - /etc/init.d/httpd restart
+
+  DmzNodeASG:
+      Type: AWS::AutoScaling::AutoScalingGroup
+      Properties:
+        DesiredCapacity: !Ref NumNodes
+        HealthCheckGracePeriod: 420
+        HealthCheckType: EC2
+        LaunchConfigurationName: !Ref DMZLaunchConfig
+        MaxSize: !Ref NumNodes
+        MinSize: !Ref NumNodes
+        LoadBalancerNames:
+          - Ref: AlbForMicroservices
+        VPCZoneIdentifier:
+          - Fn::ImportValue:
+             !Sub ${NetworkStack}-DmzSubnetAId
+          - Fn::ImportValue:
+             !Sub ${NetworkStack}-DmzSubnetBId
+        Tags:
+          - Key: Cluster
+            Value: !Ref AWS::StackName
+            PropagateAtLaunch: True
+
+  DmzSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: DmzSecurityGroup
+      GroupDescription: DmzSecurityGroup
+      VpcId:
+        Fn::ImportValue:
+          !Sub ${NetworkStack}-VpcId
+
+  DmzSecurityGroupEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref DmzSecurityGroup
+      CidrIp: 0.0.0.0/0
+      IpProtocol: "-1"
+
+  DmzSecurityGroupIngressAllowWeb:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DmzSecurityGroup
+      CidrIp: 0.0.0.0/0
+      IpProtocol: "tcp"
+      FromPort: 80
+      ToPort: 80
+
+  DmzSecurityGroupIngressAllowSSH:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DmzSecurityGroup
+      CidrIp: 0.0.0.0/0
+      IpProtocol: "tcp"
+      FromPort: 22
+      ToPort: 22
+
+  DmzSecurityGroupIngressAllowTCP:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DmzSecurityGroup
+      CidrIp:
+        Fn::ImportValue:
+          !Sub ${NetworkStack}-VpcCidr
+      IpProtocol: "tcp"
+      FromPort: 1024
+      ToPort: 65535
+
+
+  AlbForMicroservices:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      HealthCheck:
+        HealthyThreshold: 2
+        Interval: 30
+        Target: HTTP:80/index.html
+        Timeout: 5
+        UnhealthyThreshold: 5
+      LoadBalancerName: AlbForMicroservices
+      SecurityGroups:
+        - !Ref AlbSecurityGroup
+      Subnets:
+        - Fn::ImportValue:
+           !Sub ${NetworkStack}-DmzSubnetAId
+        - Fn::ImportValue:
+           !Sub ${NetworkStack}-DmzSubnetBId
+      Scheme: internet-facing
+      CrossZone : true
+      Listeners :
+        - LoadBalancerPort : "80"
+          InstancePort : "80"
+          Protocol : "HTTP"
+
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: AlbSecurityGroup
+      GroupDescription: AlbSecurityGroup
+      VpcId:
+        Fn::ImportValue:
+          !Sub ${NetworkStack}-VpcId
+
+  AlbSecurityGroupEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref AlbSecurityGroup
+      CidrIp: 0.0.0.0/0
+      IpProtocol: "-1"
+
+  AlbSecurityGroupIngressAllowWeb:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref AlbSecurityGroup
+      CidrIp: 0.0.0.0/0
+      IpProtocol: "tcp"
+      FromPort: 80
+      ToPort: 80
+
+
+  AlbForMicroservicesInternal:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      LoadBalancerName: AlbForMicroservicesInternal
+      Subnets:
+        - Fn::ImportValue:
+           !Sub ${NetworkStack}-SubnetNodesAId
+        - Fn::ImportValue:
+           !Sub ${NetworkStack}-SubnetNodesBId
+      Scheme: internal
+      CrossZone : true
+      Listeners :
+        - LoadBalancerPort : "80"
+          InstancePort : "80"
+          Protocol : "HTTP"
+

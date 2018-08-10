@@ -1,0 +1,123 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Complete aem setup
+
+Resources:
+ Vpc:
+  Type: AWS::EC2::VPC
+  Properties:
+   CidrBlock: 10.0.0.0/16
+   EnableDnsSupport: True
+   EnableDnsHostnames: True
+   Tags:
+   - Key: Name
+     Value: !Ref "AWS::StackName"
+ subnetDmzA:
+   Type: "AWS::EC2::Subnet"
+   Properties:
+     AvailabilityZone: !Select [0, !GetAZs ""]
+     CidrBlock: 10.0.0.0/24
+     MapPublicIpOnLaunch: True
+     Tags:
+     - Key: Name
+       Value: DMZ A
+     - Key: Scope
+       Value: public
+     VpcId: !Ref Vpc
+ subnetDmzB:
+   Type: "AWS::EC2::Subnet"
+   Properties:
+     AvailabilityZone: !Select [1, !GetAZs ""]
+     CidrBlock: 10.0.1.0/24
+     MapPublicIpOnLaunch: True
+     Tags:
+     - Key: Name
+       Value: DMZ B
+     - Key: Scope
+       Value: public
+     VpcId: !Ref Vpc
+
+ subnetNodesA:
+   Type: "AWS::EC2::Subnet"
+   Properties:
+     AvailabilityZone: !Select [0, !GetAZs ""]
+     CidrBlock: 10.0.3.0/24
+     MapPublicIpOnLaunch: False
+     Tags:
+     - Key: Name
+       Value: Node A
+     - Key: Scope
+       Value: private
+     - Key: Purpose
+       Value: nodes
+     VpcId: !Ref Vpc
+ subnetNodesB:
+   Type: "AWS::EC2::Subnet"
+   Properties:
+     AvailabilityZone: !Select [1, !GetAZs ""]
+     CidrBlock: 10.0.4.0/24
+     MapPublicIpOnLaunch: False
+     Tags:
+     - Key: Name
+       Value: Node B
+     - Key: Scope
+       Value: private
+     - Key: Purpose
+       Value: nodes
+     VpcId: !Ref Vpc
+ subnetDbA:
+   Type: "AWS::EC2::Subnet"
+   Properties:
+     AvailabilityZone: !Select [0, !GetAZs ""]
+     CidrBlock: 10.0.5.0/28
+     MapPublicIpOnLaunch: False
+     Tags:
+     - Key: Name
+       Value: DB A
+     - Key: Scope
+       Value: private
+     - Key: Purpose
+       Value: db
+     VpcId: !Ref Vpc
+
+
+Outputs:
+  VpcId:
+    Description: "VPC ID"
+    Value: !Ref Vpc
+    Export:
+      Name: !Sub ${AWS::StackName}-VpcId
+  VpcCidr:
+    Description: "VPC ID"
+    Value: !GetAtt Vpc.CidrBlock
+    Export:
+      Name: !Sub ${AWS::StackName}-VpcCidr
+
+  DmzSubnetAId:
+    Description: "DMZ A Subnet ID"
+    Value: !Ref subnetDmzA
+    Export:
+      Name: !Sub ${AWS::StackName}-DmzSubnetAId
+  DmzSubnetBId:
+    Description: "DMZ B Subnet ID"
+    Value: !Ref subnetDmzB
+    Export:
+      Name: !Sub ${AWS::StackName}-DmzSubnetBId
+
+  SubnetNodesAId:
+    Description: "Node Subnet A ID"
+    Value:  !Ref subnetNodesA
+    Export:
+      Name: !Sub ${AWS::StackName}-SubnetNodesAId
+  SubnetNodesBId:
+    Description: "Node Subnet B ID"
+    Value:  !Ref subnetNodesB
+    Export:
+      Name: !Sub ${AWS::StackName}-SubnetNodesBId
+
+  SubnetDbAId:
+    Description: "DB Subnet A ID"
+    Value:  !Ref subnetDbA
+    Export:
+      Name: !Sub ${AWS::StackName}-SubnetDbAId
+
