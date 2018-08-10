@@ -1,11 +1,11 @@
-node {
-    checkout scm 
-    stages { 
-         stage ("Build Stage") {
-    echo "run the script"
-    sh ls create.sh
-    'ls -lrt'
-    /* .. snip .. */
+pipeline {
+    agent any
+
+    stages {
+       stage ("Build Stage") {
+        checkout scm 
+        echo "run the script"
+        'ls -lrt'
+        /* .. snip .. */
    }
- }
 }
