@@ -6,7 +6,7 @@ pipeline {
          steps {
         checkout scm 
         echo "run the script"
-        'ls -lrt'
+        sh "ls -lrt"
         /* .. snip .. */
      }
    }
