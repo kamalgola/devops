@@ -8,4 +8,5 @@ pipeline {
         'ls -lrt'
         /* .. snip .. */
    }
+ }
 }
