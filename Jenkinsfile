@@ -1,13 +1,14 @@
 pipeline {
     agent any
-    checkout scm 
 
     stages {
        stage ("Build Stage") {
-
+         steps {
+        checkout scm 
         echo "run the script"
         'ls -lrt'
         /* .. snip .. */
+     }
    }
  }
 }
