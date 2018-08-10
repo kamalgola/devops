@@ -5,10 +5,10 @@ pipeline {
        stage ("Build Stage") {
          steps {
         checkout scm 
-        echo "run the script"
-        sh "ls -lrt"
+        echo "Creating new Stack $STACK_NAME"
+        sh "./create_stack.sh $STACK_NAME"
         /* .. snip .. */
-     }
+        }
+      }  
    }
- }
 }
